@@ -547,6 +547,33 @@ namespace MConnect {
                         }
                     break;
 
+                    case ClipboardHandler.CLIPBOARD:
+                        if (!plugins_map.has_key (ClipboardHandler.CLIPBOARD)) {
+                            var clipboard_plugin = new EOSConnect.Plugin.Clipboard ();
+                            clipboard_plugin.is_active = settings.get_boolean (
+                                clipboard_plugin.settings_key_is_active);
+                            plugins_map.@set (ClipboardHandler.CLIPBOARD, clipboard_plugin);
+                        }
+                    break;
+
+                    case MprisHandler.MPRIS:
+                        if (!plugins_map.has_key (MprisHandler.MPRIS)) {
+                            var mpris_plugin = new EOSConnect.Plugin.Multimedia ();
+                            mpris_plugin.is_active = settings.get_boolean (
+                                mpris_plugin.settings_key_is_active);
+                            plugins_map.@set (MprisHandler.MPRIS, mpris_plugin);
+                        }
+                    break;
+
+                    case RunCommandHandler.RUNCOMMAND:
+                        if (!plugins_map.has_key (RunCommandHandler.RUNCOMMAND)) {
+                            var command_plugin = new EOSConnect.Plugin.RunCommand ();
+                            command_plugin.is_active = settings.get_boolean (
+                                command_plugin.settings_key_is_active);
+                            plugins_map.@set (RunCommandHandler.RUNCOMMAND, command_plugin);
+                        }
+                    break;
+
                     default:
                         // info ("Unable to find a plugin for this %s capability: %s", plugin_type, capability_name);
                     break;

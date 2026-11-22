@@ -13,6 +13,11 @@
       <default>true</default>
       <summary>Activate / Deactivate the storage of SMS for all devices.</summary>
     </key>
+    <key type="s" name="kdeconnect-runcommands">
+      <default>"{}"</default>
+      <summary>Allowlisted commands available to remote devices.</summary>
+      <description>JSON array of objects containing id, name, and command fields.</description>
+    </key>
   </schema>
   <schema id="com.github.gyan000.eos-connect.settings.device">
     <key type="s" name="custom-name">
@@ -67,6 +72,18 @@
     <key type="b" name="kdeconnect-telephony-store-sms-active">
       <default>true</default>
       <summary>Store SMS.</summary>
+    </key>
+    <key type="b" name="kdeconnect-clipboard-active">
+      <default>true</default>
+      <summary>Synchronize the clipboard with paired devices.</summary>
+    </key>
+    <key type="b" name="kdeconnect-mpris-active">
+      <default>true</default>
+      <summary>Allow paired devices to control multimedia players.</summary>
+    </key>
+    <key type="b" name="kdeconnect-runcommand-active">
+      <default>true</default>
+      <summary>Allow paired devices to start allowlisted commands.</summary>
     </key>
   </schema>
 </schemalist>

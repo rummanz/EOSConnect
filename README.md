@@ -24,8 +24,28 @@ The first input event can also be missed while the portal session is being creat
 
 - Device discovery, pairing, connections, two-way file transfer, and plugin settings have been tested.
 - Remote mouse and keyboard input have been tested in an X11 session.
+- Plaintext clipboard synchronization has been tested and works.
+- MPRIS multimedia control has been tested and works.
+- Remote commands can be configured through EOSConnect's device plugin settings and are synchronized to paired devices.
 - SMS and address-book/contact features are implemented in the existing application but have not yet been tested as part of this revival.
 - Remote input through a Wayland portal is experimental and unavailable on elementary OS until its portal backend supports RemoteDesktop.
+
+#### Configuring remote commands
+
+Remote commands are disabled until commands are explicitly allowlisted. They can be added, edited, and removed from the EOSConnect device plugin settings. They can also be configured directly in GSettings:
+
+```bash
+gsettings set com.github.gyan000.eos-connect kdeconnect-runcommands \
+  '{"lock":{"name":"Lock screen","command":"loginctl lock-session"},"shutdown":{"name":"Shutdown","command":"systemctl poweroff"}}'
+```
+
+Read the current allowlist with:
+
+```bash
+gsettings get com.github.gyan000.eos-connect kdeconnect-runcommands
+```
+
+Only commands in this allowlist can be started. Commands are executed through `/bin/sh -c`, so configure only trusted commands and review them before enabling the feature.
 
 ### Warning
 
@@ -105,15 +125,18 @@ sudo ninja -C build install
 - [ ] Telephony plugin configuration.
 
 #### v0.7 - Commands
-- [ ] Execute commands.
-- [ ] Command plugin configuration. (configuration window with available commands for remove device)
+- [x] Execute an explicit allowlist of configured commands.
+- [x] Command plugin configuration window.
+- [x] Synchronize configured commands with paired devices.
+- [ ] Remote command confirmation UI.
 
 #### v0.8 - Clipboard
-- [ ] Copy / past working. (in both direction ?)
-- [ ] Clipboard plugin configuration. 
+- [x] Synchronize plaintext clipboard content with paired devices. (verified)
+- [x] Clipboard plugin configuration.
 
 #### v0.9 - Multimedia control 
-- [ ] Multimedia control plugin configuration.
+- [x] MPRIS player discovery and basic playback, track, volume, and seeking controls. (verified)
+- [x] Multimedia control plugin configuration.
 
 #### v0.9.1 - Remote control
 - [x] Remote mouse and keyboard input on X11.
