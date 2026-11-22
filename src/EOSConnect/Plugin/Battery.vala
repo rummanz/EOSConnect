@@ -43,7 +43,7 @@ namespace EOSConnect.Plugin {
 
         public override void handle_configure_button (Device device) {
             if (_battery_settings_popover == null) {
-                var _battery_settings_popover = new BatterySettings (device, row_configure_button);
+                _battery_settings_popover = new BatterySettings (device, row_configure_button);
                 _battery_settings_popover.show_all ();
 
                 _battery_settings_popover.destroy.connect (() => {

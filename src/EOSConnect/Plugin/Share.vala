@@ -38,8 +38,9 @@ namespace EOSConnect.Plugin {
 
         public override void handle_configure_button (Device device) {
             if (share_settings_popover == null) {
-                var share_settings_popover = new ShareSettings (device, row_configure_button);
+                share_settings_popover = new ShareSettings (device, row_configure_button);
                 share_settings_popover.show_all ();
+                share_settings_popover.popup ();
 
                 share_settings_popover.destroy.connect (() => {
                     share_settings_popover = null;

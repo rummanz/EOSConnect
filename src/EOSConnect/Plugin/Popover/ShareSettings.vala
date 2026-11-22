@@ -34,7 +34,6 @@ namespace EOSConnect.Plugin.Popover {
         }
 
         construct {
-
             var share_icon = new Gtk.Image.from_icon_name ("emblem-shared", Gtk.IconSize.DND);
             share_icon.pixel_size = 64;
             share_icon.margin = 5;
@@ -45,9 +44,12 @@ namespace EOSConnect.Plugin.Popover {
                                                           Gtk.FileChooserAction.SELECT_FOLDER);
             var directory = device.settings.get_string ("kdeconnect-share-directory");
             if (directory.length > 5) {
-                file_chooser.set_uri (directory);
+                if (!file_chooser.set_uri (directory)) {
+                    warning ("Cannot select configured share directory: %s", directory);
+                    file_chooser.set_filename (ShareHandler.DOWNLOADS);
+                }
             } else {
-                file_chooser.set_uri (ShareHandler.DOWNLOADS);
+                file_chooser.set_filename (ShareHandler.DOWNLOADS);
             }
 
 

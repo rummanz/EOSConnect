@@ -43,7 +43,7 @@ namespace EOSConnect.Plugin {
 
         public override void handle_configure_button (Device device) {
             if (_telephony_settings_popover == null) {
-                var _telephony_settings_popover = new TelephonySettings (device, row_configure_button);
+                _telephony_settings_popover = new TelephonySettings (device, row_configure_button);
                 _telephony_settings_popover.show_all ();
 
                 _telephony_settings_popover.destroy.connect (() => {
