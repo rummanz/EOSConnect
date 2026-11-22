@@ -1,46 +1,35 @@
-## Important note
-
-2019-01-04 - Since I don't own anymore an android device, I'm not able to develop it... so, developpement is stopped so far.
-Please check the fork [Conecto](https://github.com/hannesschulze/conecto/tree/master) started by @hannesschulze
-
-
 ## EOSConnect
 
-It's a KDEConnect client using GTK+ written in Vala, based on [mconnect](https://github.com/kevinselvaprasanna/mconnect).
-The application is designed for elementary OS. (but should works on other distributions, perhaps.)
+EOSConnect is a GTK KDE Connect client written in Vala, originally designed for elementary OS. Its embedded, mconnect-derived backend communicates with KDE Connect-compatible Android devices.
 
-A note on [mconnect](https://github.com/kevinselvaprasanna/mconnect). First version of EOSConnect used a custom fork of mconnect, extending his DBus API, so used as a backend, started by EOSConnect at startup. But I encoutered lot's of issues with async DBus calls in order to setup mconnect backend correctly, and EOSConnect began to have too much files and abstractions classes - in order to be able to change the backend later. So I decided to integrate directly mconnect code into EOSConnect, removing his DBus API. It removed lot's of code in EOSConnect and I was able to setup and adapt mconnect like I want easily.
+### Project history and direction
 
-The embedded mconnect-derived backend now implements the KDE Connect protocol v8 connection handshake and identity capability exchange. Remote mouse/keyboard input uses AT-SPI on X11. On Wayland, EOSConnect requests access through the desktop's `org.freedesktop.portal.RemoteDesktop` interface; this currently uses the portal's D-Bus input methods, so it only works on portal implementations that expose them. elementary OS's portal does not currently provide RemoteDesktop, so Wayland remote input is not yet available there.
+The original EOSConnect was developed as an elementary OS application and later abandoned by its author. Its backend was derived from an older version of mconnect and integrated directly into EOSConnect rather than run as a separate D-Bus service.
 
-Pairing requests use the protocol timestamp, and incoming requests are presented for confirmation in EOSConnect before they are accepted. File-transfer payloads use KDE Connect's TCP port range (1739-1764).
+Conecto began as a fork of EOSConnect and was substantially rewritten in C++. That rewrite offered a fresh implementation, but it also meant the project had moved away from EOSConnect's existing Vala codebase and its original elementary-oriented application. For this revival, EOSConnect was chosen as the starting point because the goal is specifically to bring back an elementary-friendly GTK application, and its existing interface, plugin structure, and feature work provide a direct foundation. This avoids starting with a wholesale port or replacing the UI before addressing the broken backend and features.
+
+The revival is keeping the GTK application and improving its embedded backend incrementally. The backend has been updated for KDE Connect protocol v8, including the connection handshake, identity capability exchange, pairing, and file-transfer port range. More features are being tested individually; implementation alone is not treated as proof that a feature works.
+
+### Remote mouse and keyboard input
+
+Remote input is verified to work in an X11 session. The X11 implementation uses AT-SPI to synthesize pointer and keyboard events.
+
+Wayland does not permit applications to inject global input in the same way. EOSConnect therefore has a separate client for the standard `org.freedesktop.portal.RemoteDesktop` portal. That portal must be provided by the desktop environment, support keyboard and pointer access, and authorize the session. EOSConnect currently sends input through the portal's D-Bus `Notify*` methods; it does not yet implement the EIS/libei input path.
+
+**Wayland support is not currently working on elementary OS.** The elementary portal backend does not presently implement `RemoteDesktop`, so EOSConnect has no supported portal through which to request remote input there. The client may work on another desktop only if that desktop's selected portal backend exposes the RemoteDesktop interface and compatible D-Bus input methods; that has not yet been verified across other desktops. A portal that only supports EIS/libei is not compatible with the current client.
+
+The first input event can also be missed while the portal session is being created and awaiting authorization. Remote input on Wayland should be considered experimental until the portal support and session behavior are tested on the target desktop.
+
+### Current testing status
+
+- Device discovery, pairing, connections, two-way file transfer, and plugin settings have been tested.
+- Remote mouse and keyboard input have been tested in an X11 session.
+- SMS and address-book/contact features are implemented in the existing application but have not yet been tested as part of this revival.
+- Remote input through a Wayland portal is experimental and unavailable on elementary OS until its portal backend supports RemoteDesktop.
 
 ### Warning
 
-It's a Work In Progess, not intented for daily use.
-
-### Screenshots
-#### Main window
-![main window](https://raw.githubusercontent.com/gyan000/EOSConnect/master/screenshots/devices.png "Main window")
-
-#### SMS tab
-![sms tab](https://raw.githubusercontent.com/gyan000/EOSConnect/master/screenshots/sms.png "SMS tab")
-
-#### Send a SMS without using SMS tab
-
-It's searching in available adressbooks, or you can use a custom phone number.
-
-![sms tab](https://raw.githubusercontent.com/gyan000/EOSConnect/master/screenshots/quick_send_sms.png "Send SMS 1")
-![sms tab](https://raw.githubusercontent.com/gyan000/EOSConnect/master/screenshots/quick_send_sms2.png "Send SMS 2")
-
-#### Send file(s) to device
-
-You can send files to device from Files's context menu. (or from the Dock's quick list.)
-
-![sms tab](https://raw.githubusercontent.com/gyan000/EOSConnect/master/screenshots/send_file_from_files.png "Send file(s)")
-
-#### Dock integration
-![sms tab](https://raw.githubusercontent.com/gyan000/EOSConnect/master/screenshots/dock_integration.png "Dock integration")
+This project is a work in progress and is not intended for daily use.
 
 
 ### Installation
@@ -66,11 +55,6 @@ meson build && clear && ninja -C build && glib-compile-schemas ./data/
 ```bash
 sudo ninja -C build install
   ```
-
-### Known issues
-* When launching app, sometimes, configured device, not connected on local network, does not appears as "not connected".
-* When launching app, sometimes, need to unlock phone/tablet in order to see the device "connected".
-* When started for the first time from build directory, quicklist not available.
 
 ### Roadmap
 #### v0.1
@@ -102,15 +86,15 @@ sudo ninja -C build install
 - [x] Share plugin configuration. (option to setup default save folder)
 - [x] Add option to Files's context menu to send file(s) to a device.
 
-#### v0.5 - SMS
-- [x] Send / receive SMS, with SMS notification.
-- [x] Option to display SMS tab in dynamic quicklist.
-- [x] Tab in main window with SMS history by contact. 
-- [x] Add an icon on header bar to send SMS to one or more contacts. 
-- [x] Use libedataserver & libebook to get available adressbooks and take contacts with mobile phone. (and use contact photo if available)
-- [x] Widget to send SMS, with input text and dropdown to select available device, which can send a SMS. (to use in the widget send SMS fom header bar, and into the SMS tab.)
-- [x] When entering phone number or contact name in SMS widget from headerbar, display available contacts, with photo.
-- [x] Use sqlite3 to store SMS by phone number. (and be able to scroll back in the history)
+#### v0.5 - SMS and contacts
+- [ ] Send / receive SMS, with SMS notification. (implemented; not yet tested in this revival)
+- [ ] Option to display SMS tab in dynamic quicklist. (not yet tested)
+- [ ] Tab in main window with SMS history by contact. (not yet tested)
+- [ ] Add an icon on header bar to send SMS to one or more contacts. (not yet tested)
+- [ ] Load contacts from address books using libedataserver and libebook, including phone numbers and contact photos. (implemented; not yet tested)
+- [ ] Widget to send SMS, with input text and dropdown to select an available device.
+- [ ] Display matching contacts when entering a phone number or contact name in the SMS widget.
+- [ ] Store SMS by phone number in SQLite and browse message history.
 - [ ] When user do not want to store SMS with sqlite, use a dummy SMS store.
 - [ ] General option, for all devices, to activate or not the storage of SMS history.
 - [ ] SMS plugin configuration. (to setup how many days of history we want to keep)
@@ -132,6 +116,9 @@ sudo ninja -C build install
 - [ ] Multimedia control plugin configuration.
 
 #### v0.9.1 - Remote control
+- [x] Remote mouse and keyboard input on X11.
+- [ ] Remote mouse and keyboard input through a Wayland RemoteDesktop portal. (experimental; requires a compatible portal backend; unavailable on elementary OS currently)
+- [ ] Dedicated presentation / slide-control feature. (not implemented)
 - [ ] Remote control plugin configuration
 
 #### v1
