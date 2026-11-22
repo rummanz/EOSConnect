@@ -36,14 +36,18 @@ namespace EOSConnect {
         public async static void clean_contractor_directory () {
             try {
                 File directory = File.new_for_path (get_contract_dir ());
-                FileEnumerator enumerator = directory.enumerate_children (FileAttribute.STANDARD_NAME, 0);
-                FileInfo file_info, iterated_file_info;
-                File iterated_file;
-                while ((file_info = enumerator.next_file ()) != null) {
-                    enumerator.iterate (out iterated_file_info, out iterated_file);
-                    debug ("Deleting %s", iterated_file_info.get_name ());
-                    iterated_file.delete ();
+                if (!directory.query_exists ()) {
+                    return;
                 }
+
+                FileEnumerator enumerator = directory.enumerate_children (FileAttribute.STANDARD_NAME, 0);
+                FileInfo? file_info;
+                while ((file_info = enumerator.next_file ()) != null) {
+                    var contract = directory.get_child (file_info.get_name ());
+                    debug ("Deleting %s", file_info.get_name ());
+                    contract.delete ();
+                }
+                enumerator.close ();
             } catch (Error e) {
         		warning ("Error: %s\n", e.message);
         	}
