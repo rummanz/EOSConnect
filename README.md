@@ -11,6 +11,10 @@ The application is designed for elementary OS. (but should works on other distri
 
 A note on [mconnect](https://github.com/kevinselvaprasanna/mconnect). First version of EOSConnect used a custom fork of mconnect, extending his DBus API, so used as a backend, started by EOSConnect at startup. But I encoutered lot's of issues with async DBus calls in order to setup mconnect backend correctly, and EOSConnect began to have too much files and abstractions classes - in order to be able to change the backend later. So I decided to integrate directly mconnect code into EOSConnect, removing his DBus API. It removed lot's of code in EOSConnect and I was able to setup and adapt mconnect like I want easily.
 
+The embedded mconnect-derived backend now implements the KDE Connect protocol v8 connection handshake and identity capability exchange. Remote mouse/keyboard input uses AT-SPI on X11. On Wayland, EOSConnect requests access through the desktop's `org.freedesktop.portal.RemoteDesktop` interface; this currently uses the portal's D-Bus input methods, so it only works on portal implementations that expose them. elementary OS's portal does not currently provide RemoteDesktop, so Wayland remote input is not yet available there.
+
+Pairing requests use the protocol timestamp, and incoming requests are presented for confirmation in EOSConnect before they are accepted. File-transfer payloads use KDE Connect's TCP port range (1739-1764).
+
 ### Warning
 
 It's a Work In Progess, not intented for daily use.
