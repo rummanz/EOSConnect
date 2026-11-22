@@ -27,9 +27,12 @@ namespace MConnect {
         public const uint PAIR_TIMEOUT = 30;
 
         public signal void paired (bool pair);
+        public signal void pairing_requested ();
+        public signal void pairing_failed ();
         public signal void connected ();
         public signal void disconnected ();
         public signal void message (Packet pkt);
+        public signal void identity_updated ();
         /**
          * capability_added:
          * @cap: device capability, eg. kdeconnect.notification
@@ -51,8 +54,8 @@ namespace MConnect {
         public string name { get; private set; default = ""; }
         public string custom_name { get; set; default = ""; }
         public string device_type { get; private set; default = ""; }
-        public uint protocol_version { get; private set; default = 7; }
-        public uint tcp_port { get; private set; default = 1714; }
+        public uint protocol_version { get; private set; default = 8; }
+        public uint tcp_port { get; private set; default = 1716; }
         public InetAddress host { get; private set; default = null; }
         public bool is_paired { get; private set; default = false; }
         public bool allowed { get; set; default = false; }
@@ -76,8 +79,10 @@ namespace MConnect {
         public Gee.HashMap<string, PluginInterface> plugins_map { get; private set; }
 
         private HashSet<string> _capabilities = null;
+        private bool _capabilities_known = false;
         // Set to true if pair request was sent
         private bool _pair_in_progress = false;
+        private bool _peer_pair_requested = false;
         private uint _pair_timeout_source = 0;
         private DeviceChannel _channel = null;
         // Registered packet handlers
@@ -118,12 +123,8 @@ namespace MConnect {
                     disc.outgoing_capabilities);
                 incoming_capabilities = new ArrayList<string>.wrap (
                     disc.incoming_capabilities);
+                _capabilities_known = disc.capabilities_known;
                 setup_plugins ();
-
-                if (Core.instance ().devices_map.has_key (this.to_unique_string ()) == false) {
-                    debug ("It's a real new device %s", name);
-                    Core.instance ().devices_map.@set (id, this);
-                }
             } catch (Error e) {
                 warning ("Error: %s", e.message);
             }
@@ -168,6 +169,7 @@ namespace MConnect {
                     cache.get_string_list (name, "outgoing_capabilities"));
                 dev.incoming_capabilities = new ArrayList<string>.wrap (
                     cache.get_string_list (name, "incoming_capabilities"));
+                dev._capabilities_known = true;
                 dev.setup_plugins ();
                 var host = new InetAddress.from_string (last_ip_str);
                 if (host == null) {
@@ -186,13 +188,10 @@ namespace MConnect {
         }
 
         /**
-         * Generates a unique string for this device
+         * Returns the stable device ID used as its map key.
          */
         public string to_unique_string () {
-            return Utils.make_unique_device_string (id,
-                                                    name,
-                                                    device_type,
-                                                    protocol_version);
+            return id;
         }
 
         public string to_string () {
@@ -230,19 +229,54 @@ namespace MConnect {
          * @param expect_response se to true if expecting a response
          */
         public async void pair (bool expect_response = true) {
-            if (host != null) {
-                debug ("Start pairing.");
-                if (expect_response == true) {
-                    _pair_in_progress = true;
-                    _pair_timeout_source = Timeout.add_seconds (PAIR_TIMEOUT, pair_timeout);
-                }
+            if (_channel == null || !is_active) {
+                warning ("Cannot pair with %s: device is not connected", name);
+                return;
+            }
 
+            if (is_paired || _pair_in_progress || _peer_pair_requested) {
+                return;
+            }
+
+            debug ("Start pairing.");
+            if (expect_response) {
+                _pair_in_progress = true;
+                _pair_timeout_source = Timeout.add_seconds (PAIR_TIMEOUT, pair_timeout);
+                yield _channel.send (Packet.new_pair (true, true));
+            } else {
                 yield _channel.send (Packet.new_pair ());
             }
         }
 
         public void pair_device () {
-            pair.begin ();
+            if (_peer_pair_requested) {
+                accept_pairing.begin ();
+            } else {
+                pair.begin ();
+            }
+        }
+
+        public async void accept_pairing () {
+            if (_channel == null || !is_active || !_peer_pair_requested) {
+                warning ("Cannot accept pairing with %s: no active pairing request", name);
+                return;
+            }
+
+            yield _channel.send (Packet.new_pair ());
+            clear_pair_timeout ();
+            _peer_pair_requested = false;
+            update_pair_state (true);
+        }
+
+        public async void reject_pairing () {
+            if (_channel == null || !is_active || !_peer_pair_requested) {
+                warning ("Cannot reject pairing with %s: no active pairing request", name);
+                return;
+            }
+
+            yield _channel.send (Packet.new_pair (false));
+            clear_pair_timeout ();
+            _peer_pair_requested = false;
         }
 
         /**
@@ -355,9 +389,31 @@ namespace MConnect {
          * and @capability_removed signals.
          */
         public void update_from_device (Device other_dev) {
-            outgoing_capabilities = other_dev.outgoing_capabilities;
-            incoming_capabilities = other_dev.incoming_capabilities;
+            name = other_dev.name;
+            device_type = other_dev.device_type;
+            protocol_version = other_dev.protocol_version;
 
+            if (other_dev._capabilities_known) {
+                outgoing_capabilities = other_dev.outgoing_capabilities;
+                incoming_capabilities = other_dev.incoming_capabilities;
+                _capabilities_known = true;
+                update_capabilities ();
+            }
+
+            if (other_dev.host != null &&
+                (host == null || host.to_string () != other_dev.host.to_string () ||
+                 tcp_port != other_dev.tcp_port)) {
+                debug ("Device address changed; reconnecting to %s:%u",
+                       other_dev.host.to_string (), other_dev.tcp_port);
+                // Deactivate first
+                deactivate ();
+
+                host = other_dev.host;
+                tcp_port = other_dev.tcp_port;
+            }
+        }
+
+        private void update_capabilities () {
             HashSet<string> added;
             HashSet<string> removed;
             merge_capabilities (out added, out removed);
@@ -374,15 +430,6 @@ namespace MConnect {
                 // Remove capability handlers
                 unregister_capability_handler (c);
                 // Update_capabilities_status_available (c, false);
-            }
-
-            if (host != null && host.to_string () != other_dev.host.to_string ()) {
-                debug ("Host address changed from %s to %s", host.to_string (), other_dev.host.to_string ());
-                // Deactivate first
-                deactivate ();
-
-                host = other_dev.host;
-                tcp_port = other_dev.tcp_port;
             }
         }
 
@@ -409,7 +456,9 @@ namespace MConnect {
                     custom_name =  settings.get_string ("custom-name");
                 }
 
-                plugins_map = new Gee.HashMap<string, PluginInterface> ();
+                if (plugins_map == null) {
+                    plugins_map = new Gee.HashMap<string, PluginInterface> ();
+                }
                 foreach (string capability_name in incoming_capabilities) {
                     _setup_plugin (capability_name, "incoming");
                 }
@@ -434,6 +483,10 @@ namespace MConnect {
         private void _setup_plugin (string capability_name, string plugin_type) {
             try {
                 string[] capability_name_parts = capability_name.split(".");
+                if (capability_name_parts.length < 2) {
+                    warning ("Ignoring invalid capability name: %s", capability_name);
+                    return;
+                }
                 string plugin_capability_name = capability_name_parts[0] + "." + capability_name_parts[1];
 
                 switch (plugin_capability_name) {
@@ -507,10 +560,10 @@ namespace MConnect {
             var core = Core.instance ();
             string host_name = Environment.get_host_name ();
             string user = Environment.get_user_name ();
-            yield _channel.send (Packet.new_identity (@"$user@$host_name",
-                                                      Environment.get_host_name (),
-                                                      core.handlers.interfaces,
-                                                      core.handlers.interfaces));
+            yield _channel.send (Packet.new_connection (@"$user@$host_name",
+                                                        core.device_id,
+                                                        id,
+                                                        protocol_version));
 
             // Switch to secure channel
             var secure = yield _channel.secure (certificate);
@@ -519,6 +572,10 @@ namespace MConnect {
 
             if (secure) {
                 update_certificate (_channel.peer_certificate);
+                yield _channel.send (Packet.new_identity (@"$user@$host_name",
+                                                          core.device_id,
+                                                          core.handlers.interfaces,
+                                                          core.handlers.interfaces));
                 maybe_pair ();
             } else {
                 warning ("Failed to enable secure channel.");
@@ -529,10 +586,21 @@ namespace MConnect {
         private bool pair_timeout () {
             warning ("Pair request timeout.");
             _pair_timeout_source = 0;
-            // Handle failed pairing.
-            handle_pair (false);
-            // Remove timeout source.
+            if (_channel != null && is_active) {
+                _channel.send.begin (Packet.new_pair (false));
+            }
+            _pair_in_progress = false;
+            _peer_pair_requested = false;
+            pairing_failed ();
+            update_pair_state (false);
             return false;
+        }
+
+        private void clear_pair_timeout () {
+            if (_pair_timeout_source != 0) {
+                Source.remove (_pair_timeout_source);
+                _pair_timeout_source = 0;
+            }
         }
 
         /**
@@ -553,7 +621,37 @@ namespace MConnect {
         }
 
         private void packet_received (Packet pkt) {
-            if (pkt.pkt_type == Packet.PAIR) {
+            if (pkt.pkt_type == Packet.IDENTITY) {
+                if (!pkt.body.has_member ("deviceId") ||
+                    !pkt.body.has_member ("deviceName") ||
+                    !pkt.body.has_member ("deviceType") ||
+                    !pkt.body.has_member ("protocolVersion") ||
+                    !pkt.body.has_member ("incomingCapabilities") ||
+                    !pkt.body.has_member ("outgoingCapabilities")) {
+                    warning ("Ignoring incomplete identity packet");
+                    close_and_cleanup ();
+                    return;
+                }
+
+                var discovered = new DiscoveredDevice.from_identity (pkt, host);
+                if (discovered.id != id || discovered.protocol_version != protocol_version) {
+                    warning ("Ignoring identity packet with changed device ID or protocol version");
+                    close_and_cleanup ();
+                    return;
+                }
+                name = discovered.name;
+                device_type = discovered.device_type;
+                protocol_version = discovered.protocol_version;
+                if (pkt.body.has_member ("tcpPort")) {
+                    tcp_port = discovered.tcp_port;
+                }
+                incoming_capabilities = new ArrayList<string>.wrap (discovered.incoming_capabilities);
+                outgoing_capabilities = new ArrayList<string>.wrap (discovered.outgoing_capabilities);
+                _capabilities_known = true;
+                update_capabilities ();
+                setup_plugins ();
+                identity_updated ();
+            } else if (pkt.pkt_type == Packet.PAIR) {
                 handle_pair_packet (pkt);
             } else {
                 // We sent a pair request, but got another packet, supposedly meaning we're alredy paired
@@ -575,7 +673,28 @@ namespace MConnect {
          */
         private void handle_pair_packet (Packet pkt) {
             assert (pkt.pkt_type == Packet.PAIR);
+            if (!pkt.body.has_member ("pair")) {
+                warning ("Ignoring pairing packet without pair status");
+                return;
+            }
             bool pair = pkt.body.get_boolean_member ("pair");
+            bool has_timestamp = pkt.body.has_member ("timestamp");
+
+            if (pair && has_timestamp) {
+                if (_pair_in_progress) {
+                    _peer_pair_requested = true;
+                    accept_pairing.begin ();
+                } else if (!is_paired && !_peer_pair_requested) {
+                    _peer_pair_requested = true;
+                    _pair_timeout_source = Timeout.add_seconds (PAIR_TIMEOUT, pair_timeout);
+                    pairing_requested ();
+                }
+                return;
+            }
+
+            if (pair && !_pair_in_progress && is_paired) {
+                return;
+            }
             handle_pair (pair);
         }
 
@@ -586,10 +705,7 @@ namespace MConnect {
          * Update device pair status.
          */
         private void handle_pair (bool pair) {
-            if (_pair_timeout_source != 0) {
-                Source.remove (_pair_timeout_source);
-                _pair_timeout_source = 0;
-            }
+            clear_pair_timeout ();
 
             debug ("Pair in progress: %s is paired: %s pair: %s",
                    _pair_in_progress.to_string (), is_paired.to_string (),
@@ -598,26 +714,35 @@ namespace MConnect {
                 // response to host initiated pairing
                 if (pair == true) {
                     debug ("Device is paired, pairing complete");
-                    is_paired = true;
+                    update_pair_state (true);
                 } else {
                     warning ("Pairing rejected by device");
-                    is_paired = false;
+                    pairing_failed ();
+                    update_pair_state (false);
                 }
                 // Pair completed.
                 _pair_in_progress = false;
             } else {
                 debug ("Unsolicited pair change from device, pair status: %s", pair.to_string ());
                 if (pair == false) {
+                    if (_peer_pair_requested) {
+                        pairing_failed ();
+                    }
                     // Unpair from device.
-                    is_paired = false;
+                    update_pair_state (false);
                 } else {
-                    // Split brain, pair was not initiated by us, but we were called with information that we are
-                    // paired, assume we are paired and send a pair packet, but not expecting a response this time.
-                    this.pair.begin (false);
-                    is_paired = true;
+                    warning ("Ignoring pairing acceptance without an outstanding request");
                 }
             }
 
+            _peer_pair_requested = false;
+        }
+
+        private void update_pair_state (bool pair) {
+            if (is_paired == pair) {
+                return;
+            }
+            is_paired = pair;
             paired (is_paired);
         }
 
@@ -632,7 +757,16 @@ namespace MConnect {
         }
 
         private void close_and_cleanup () {
-            _channel.close ();
+            if (_channel == null) {
+                return;
+            }
+
+            var channel = _channel;
+            _channel = null;
+            clear_pair_timeout ();
+            _pair_in_progress = false;
+            _peer_pair_requested = false;
+            channel.close ();
             channel_closed_cleanup ();
         }
 
@@ -644,8 +778,10 @@ namespace MConnect {
         private void channel_closed_cleanup () {
             debug ("Close cleanup.");
             _channel = null;
-            is_active = false;
-            disconnected ();
+            if (is_active) {
+                is_active = false;
+                disconnected ();
+            }
         }
 
         /**

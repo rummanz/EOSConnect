@@ -29,6 +29,7 @@ namespace MConnect {
         public GLib.Application application;
         public HashMap<string, Device> devices_map;
         public GLib.Settings main_settings;
+        public string device_id { get; private set; default = ""; }
 
         private static Core _instance = null;
 
@@ -40,11 +41,13 @@ namespace MConnect {
 
                 // var config = init_config ();
                 var cert = init_crypto ();
+                string device_id = init_device_id ();
                 var handlers = new PacketHandlers ();
 
                 var core = new Core ();
                 // core.config = config;
                 core.certificate = cert;
+                core.device_id = device_id;
                 core.handlers = handlers;
 
                 info ("Supported interfaces: %s", string.joinv (", ", handlers.interfaces));
@@ -95,6 +98,40 @@ namespace MConnect {
                 throw e;
             }
             return tls_cert;
+        }
+
+        private static string init_device_id () throws Error {
+            string path = Path.build_filename (get_config_dir (), "device-id");
+            string device_id = "";
+            size_t length;
+            bool device_id_exists = false;
+
+            try {
+                FileUtils.get_contents (path, out device_id, out length);
+                device_id_exists = true;
+            } catch (FileError e) {
+                if (e is FileError.NOENT) {
+                    debug ("No stored KDE Connect device ID; generating one.");
+                } else {
+                    throw e;
+                }
+            }
+
+            if (device_id_exists) {
+                device_id = device_id.strip ();
+                if (Uuid.string_is_valid (device_id)) {
+                    return device_id;
+                }
+
+                warning ("Stored device ID is invalid; generating a new KDE Connect device ID.");
+            }
+
+            device_id = Uuid.string_random ();
+            if (!FileUtils.set_contents (path, device_id)) {
+                throw new IOError.FAILED ("Could not save KDE Connect device ID to %s", path);
+            }
+
+            return device_id;
         }
 
         // private static Config init_config () {

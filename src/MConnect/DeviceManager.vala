@@ -27,6 +27,7 @@ namespace MConnect {
         public signal void device_connected (Device dev);
         public signal void device_deconnected (Device dev);
         public signal void device_pair_changed (Device dev);
+        public signal void device_updated (Device dev);
         public signal void device_capability_added (Device dev, string capability, PacketHandlerInterface handler);
 
         public const string DEVICES_CACHE_FILE = "devices";
@@ -108,6 +109,10 @@ namespace MConnect {
                     this.found_new_device (dev);
                     dev.capability_added.connect (this.device_capability_added_cb);
                     dev.capability_removed.connect (this.device_capability_removed_cb);
+                    dev.identity_updated.connect (() => {
+                        this.update_cache ();
+                        this.device_updated (dev);
+                    });
                 }
 
                 // Update device information
@@ -256,8 +261,6 @@ namespace MConnect {
             update_cache ();
 
             if (status == false) {
-                // we're no longer interested in paired signal
-                dev.paired.disconnect (this.device_paired);
                 // we're not paired anymore, deactivate if needed
                 dev.deactivate ();
             }

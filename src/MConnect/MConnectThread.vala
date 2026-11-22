@@ -24,6 +24,7 @@ namespace MConnect {
 
         public signal void devices_updated ();
         public signal void devices_status_updated ();
+        public signal void pairing_requested (Device device);
 
         private Core core = null;
         private Discovery discovery = null;
@@ -63,6 +64,12 @@ namespace MConnect {
 
 
                 manager.found_new_device.connect ((device)  => {
+                    device.pairing_requested.connect (() => {
+                        pairing_requested (device);
+                    });
+                    device.pairing_failed.connect (() => {
+                        devices_updated ();
+                    });
                     devices_updated ();
                 });
 
@@ -75,6 +82,10 @@ namespace MConnect {
                 });
 
                 manager.device_pair_changed.connect ((device)  => {
+                    devices_updated ();
+                });
+
+                manager.device_updated.connect ((device) => {
                     devices_updated ();
                 });
 

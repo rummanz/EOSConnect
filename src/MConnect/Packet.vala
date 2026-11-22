@@ -27,7 +27,7 @@ namespace MConnect {
 
     public class Packet : GLib.Object {
 
-        public const int PROTOCOL_VERSION = 7;
+        public const int PROTOCOL_VERSION = 8;
         public const string IDENTITY = "kdeconnect.identity";
         public const string PAIR = "kdeconnect.pair";
         public const string ENCRYPTED = "kdeconnect.encrypted";
@@ -82,6 +82,9 @@ namespace MConnect {
                 string type = root_obj.get_string_member ("type");
                 int64 id = root_obj.get_int_member ("id");
                 Json.Object body = root_obj.get_object_member ("body");
+                if (body == null) {
+                    throw new PacketError.MALFORMED ("Invalid body member");
+                }
 
                 debug ("Packet type: %s", type);
 
@@ -116,16 +119,41 @@ namespace MConnect {
             return null;
         }
 
-        public static Packet new_pair (bool pair = true) {
+        public static Packet new_pair (bool pair = true, bool request = false) {
             var builder = new Json.Builder ();
             builder.begin_object ();
             builder.set_member_name ("pair");
             builder.add_boolean_value (pair);
+            if (pair && request) {
+                builder.set_member_name ("timestamp");
+                builder.add_int_value (get_real_time () / 1000000);
+            }
             builder.end_object ();
 
             var data_obj = builder.get_root ().get_object ();
 
             return new Packet (PAIR, data_obj);
+        }
+
+        public static Packet new_connection (string name,
+                                             string device_id,
+                                             string target_device_id,
+                                             uint target_protocol_version) {
+            var builder = new Json.Builder ();
+            builder.begin_object ();
+            builder.set_member_name ("deviceName");
+            builder.add_string_value (name);
+            builder.set_member_name ("deviceId");
+            builder.add_string_value (device_id);
+            builder.set_member_name ("protocolVersion");
+            builder.add_int_value (PROTOCOL_VERSION);
+            builder.set_member_name ("targetDeviceId");
+            builder.add_string_value (target_device_id);
+            builder.set_member_name ("targetProtocolVersion");
+            builder.add_int_value ((int64) target_protocol_version);
+            builder.end_object ();
+
+            return new Packet (IDENTITY, builder.get_root ().get_object ());
         }
 
         public static Packet new_identity (string name,
@@ -141,10 +169,18 @@ namespace MConnect {
             builder.add_string_value (device_id);
             builder.set_member_name ("deviceType");
             builder.add_string_value (device_type);
-            builder.set_member_name ("SupportedIncomingInterfaces");
-            builder.add_string_value (string.joinv (",", in_interfaces));
-            builder.set_member_name ("SupportedOutgoingInterfaces");
-            builder.add_string_value (string.joinv (",", out_interfaces));
+            builder.set_member_name ("incomingCapabilities");
+            builder.begin_array ();
+            foreach (string capability in in_interfaces) {
+                builder.add_string_value (capability);
+            }
+            builder.end_array ();
+            builder.set_member_name ("outgoingCapabilities");
+            builder.begin_array ();
+            foreach (string capability in out_interfaces) {
+                builder.add_string_value (capability);
+            }
+            builder.end_array ();
             builder.set_member_name ("protocolVersion");
             builder.add_int_value (PROTOCOL_VERSION);
             builder.end_object ();

@@ -31,19 +31,6 @@ namespace MConnect.Utils {
     }
 
     /**
-     * make_unique_device_string:
-     * @id: device ID
-     * @name: device name
-     * @type: device type
-     * @pv: protocol version
-     *
-     * Generate device string that can be used as map index
-     */
-    string make_unique_device_string (string id, string name, string type, uint pv) {
-        return make_device_string (id, name, type, pv).replace (" ", "-");
-    }
-
-    /**
      * make_device_string:
      * @id: device ID
      * @name: device name
@@ -168,7 +155,7 @@ namespace MConnect.Utils {
 
              // regex taken from SO
              // uncrustify breaks the regex, so *INDENT-OFF*
-             Regex r = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+,.~#?&\/=]*)/;
+             GLib.Regex r = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+,.~#?&\/=]*)/;
              // *INDENT-ON*
              MatchInfo mi;
 
@@ -187,7 +174,7 @@ namespace MConnect.Utils {
                  debug ("No match for: \"" + text + "\"");
              }
              return matches;
-         } catch (RegexError e) {
+         } catch (GLib.RegexError e) {
              warning ("Failed to compile regex: \"%s\"", e.message);
              return {};
          }

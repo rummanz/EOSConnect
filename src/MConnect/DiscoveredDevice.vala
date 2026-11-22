@@ -45,10 +45,10 @@ namespace MConnect {
         //     get; private set; default = false;
         // }
         public uint protocol_version {
-            get; private set; default = 5;
+            get; private set; default = 8;
         }
         public uint tcp_port {
-            get; private set; default = 1714;
+            get; private set; default = 1716;
         }
         public InetAddress host {
             get; private set; default = null;
@@ -59,6 +59,7 @@ namespace MConnect {
         public string[] incoming_capabilities {
             get; private set; default = null;
         }
+        public bool capabilities_known { get; private set; default = false; }
 
         /**
          * Constructs DiscoveredDevice based on identity packet.
@@ -72,23 +73,35 @@ namespace MConnect {
 
             var body = pkt.body;
             this.host = host;
-            this.name = body.get_string_member ("deviceName");
-            this.id = body.get_string_member ("deviceId");
-            this.device_type = body.get_string_member ("deviceType");
-            this.protocol_version = (int) body.get_int_member ("protocolVersion");
-            this.tcp_port = (uint) body.get_int_member ("tcpPort");
+            this.name = body.has_member ("deviceName") ? body.get_string_member ("deviceName") : "";
+            this.id = body.has_member ("deviceId") ? body.get_string_member ("deviceId") : "";
+            this.device_type = body.has_member ("deviceType") ? body.get_string_member ("deviceType") : "desktop";
+            this.protocol_version = body.has_member ("protocolVersion")
+                ? (uint) body.get_int_member ("protocolVersion")
+                : (uint) Packet.PROTOCOL_VERSION;
+            this.tcp_port = body.has_member ("tcpPort") ? (uint) body.get_int_member ("tcpPort") : 1716;
+            this.capabilities_known = body.has_member ("incomingCapabilities") &&
+                body.has_member ("outgoingCapabilities");
 
-            var incoming = body.get_array_member ("incomingCapabilities");
-            var outgoing = body.get_array_member ("outgoingCapabilities");
-            this.outgoing_capabilities = new string[outgoing.get_length ()];
-            this.incoming_capabilities = new string[incoming.get_length ()];
+            if (body.has_member ("incomingCapabilities")) {
+                var incoming = body.get_array_member ("incomingCapabilities");
+                this.incoming_capabilities = new string[incoming.get_length ()];
+                incoming.foreach_element ((a, i, n) => {
+                    this.incoming_capabilities[i] = n.get_string ();
+                });
+            } else {
+                this.incoming_capabilities = {};
+            }
 
-            incoming.foreach_element ((a, i, n) => {
-                this.incoming_capabilities[i] = n.get_string ();
-            });
-            outgoing.foreach_element ((a, i, n) => {
-                this.outgoing_capabilities[i] = n.get_string ();
-            });
+            if (body.has_member ("outgoingCapabilities")) {
+                var outgoing = body.get_array_member ("outgoingCapabilities");
+                this.outgoing_capabilities = new string[outgoing.get_length ()];
+                outgoing.foreach_element ((a, i, n) => {
+                    this.outgoing_capabilities[i] = n.get_string ();
+                });
+            } else {
+                this.outgoing_capabilities = {};
+            }
 
             debug ("Discovered new device: %s", this.to_string ());
         }

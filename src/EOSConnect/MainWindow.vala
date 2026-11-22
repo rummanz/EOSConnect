@@ -107,7 +107,7 @@ namespace EOSConnect {
             main_grid.add(sub_grid);
 
             // Debug toolbar
-            if (Granite.Services.Logger.DisplayLevel == Granite.Services.Logger.DEBUG) {
+            if (Granite.Services.Logger.DisplayLevel == Granite.Services.LogLevel.DEBUG) {
                 var debug_toolbar = new DebugToolbar (devices_view);
                 main_grid.add(debug_toolbar);
             }

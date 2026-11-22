@@ -82,14 +82,43 @@ namespace EOSConnect {
 
 
             mconnect_thread.devices_updated.connect (() => {
-                update_launcher_entry.begin  ();
-                main_window.update_ui (devices_map);
-                sms_history_view.update_available_device_combobox ();
+                Idle.add (() => {
+                    update_launcher_entry.begin ();
+                    main_window.update_ui (devices_map);
+                    sms_history_view.update_available_device_combobox ();
+                    return Source.REMOVE;
+                });
             });
 
             mconnect_thread.devices_status_updated.connect (() => {
-                update_launcher_entry.begin ();
-                sms_history_view.update_available_device_combobox ();
+                Idle.add (() => {
+                    update_launcher_entry.begin ();
+                    sms_history_view.update_available_device_combobox ();
+                    return Source.REMOVE;
+                });
+            });
+
+            mconnect_thread.pairing_requested.connect ((device) => {
+                Idle.add (() => {
+                    var dialog = new Gtk.MessageDialog (
+                        main_window,
+                        Gtk.DialogFlags.MODAL,
+                        Gtk.MessageType.QUESTION,
+                        Gtk.ButtonsType.YES_NO,
+                        _("Allow %s to pair with this computer?").printf (device.name)
+                    );
+                    dialog.title = _("Pairing request");
+                    dialog.response.connect ((response_id) => {
+                        if (response_id == Gtk.ResponseType.YES) {
+                            device.accept_pairing.begin ();
+                        } else {
+                            device.reject_pairing.begin ();
+                        }
+                        dialog.destroy ();
+                    });
+                    dialog.show ();
+                    return Source.REMOVE;
+                });
             });
 
             shutdown.connect (() => {
