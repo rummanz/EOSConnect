@@ -60,6 +60,8 @@ all_files = files(
     'MConnect/Notification.vala',
     'MConnect/NotificationHandler.vala',
     'MConnect/NotificationMonitor.vala',
+    'MConnect/MousepadHandler.vala',
+    'MConnect/RemoteDesktopPortal.vala',
     'MConnect/Packet.vala',
     'MConnect/PacketHandlerInterface.vala',
     'MConnect/PacketHandlers.vala',
