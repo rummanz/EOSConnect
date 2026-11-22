@@ -35,7 +35,7 @@ This project is a work in progress and is not intended for daily use.
 ### Installation
 * On Ubuntu or elementary OS, install these dependencies:
 ```bash
-sudo apt install elementary-sdk libunity-dev libnotify-dev libghc-gnutls-dev libsqlite3-dev libedataserver1.2-dev libebook1.2-dev -y
+sudo apt install elementary-sdk libunity-dev libnotify-dev gnutls-dev libsqlite3-dev libedataserver1.2-dev libebook1.2-dev -y
 ```
 * Clone the repository.
 * Inside the project, compile with:

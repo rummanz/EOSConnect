@@ -224,7 +224,10 @@ namespace MConnect {
             string to_send = pkt.to_string () + "\n";
             debug ("Send data: %s", to_send);
 
-            GLib.assert (this._dout != null);
+            if (this._dout == null) {
+                warning ("Cannot send %s packet: channel is closed", pkt.pkt_type);
+                return;
+            }
 
             try {
                 this._dout.put_string (to_send);
