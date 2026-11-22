@@ -186,19 +186,18 @@ namespace MConnect {
             debug ("Share file %s to device %s", path, dev.to_string ());
 
             var file = File.new_for_uri (path);
-            uint64 size = 0;
+            uint64 size;
             try {
                 var fi = file.query_info (FileAttribute.STANDARD_SIZE, FileQueryInfoFlags.NONE);
                 size = fi.get_size ();
             } catch (Error e) {
                 warning ("Failed to obtain file size: %s", e.message);
-                return;
+                throw e;
             }
 
             debug ("File size: %llu", size);
             if (size == 0) {
-                warning ("Trying to share empty file: %s", path);
-                return;
+                throw new IOError.INVALID_ARGUMENT ("Cannot share empty file: %s", path);
             }
 
             FileInputStream input;
@@ -212,8 +211,7 @@ namespace MConnect {
             uint16 port;
             var listener = Core.instance ().transfer_manager.make_listener (out port);
             if (listener == null) {
-                warning ("Could not allodate a listener.");
-                return;
+                throw new IOError.FAILED ("Could not allocate a file-transfer listener");
             }
 
             debug ("Allocated listener on port: %u", port);

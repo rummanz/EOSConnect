@@ -21,8 +21,8 @@ namespace MConnect {
 
     public class TransferManager : Object {
 
-        public const uint16 PORT_MIN = 9970;
-        public const uint16 PORT_MAX = 9975;
+        public const uint16 PORT_MIN = 1739;
+        public const uint16 PORT_MAX = 1764;
 
         public signal void new_transfer (TransferInterface job);
 
