@@ -159,6 +159,19 @@ namespace EOSConnect {
 
             this.add_action (simple_action);
 
+            SimpleAction mute_action = new SimpleAction ("telephony-mute-call", null);
+            mute_action.activate.connect (() => {
+                foreach (Device device in devices_map.values) {
+                    if (device.has_capability_handler (TelephonyHandler.TELEPHONY)) {
+                        var handler = (TelephonyHandler)device.get_path_capability_handler (
+                            TelephonyHandler.TELEPHONY);
+                        handler.mute_current_call ();
+                        return;
+                    }
+                }
+            });
+            this.add_action (mute_action);
+
             SMSStore.instance ().sms_handled.connect ( (sms) => {
                 sms_history_view.update_message_ui_adding_sms (sms);
             });

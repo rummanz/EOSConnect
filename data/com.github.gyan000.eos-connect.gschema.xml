@@ -85,5 +85,9 @@
       <default>true</default>
       <summary>Allow paired devices to start allowlisted commands.</summary>
     </key>
+    <key type="b" name="kdeconnect-systemvolume-active">
+      <default>true</default>
+      <summary>Allow paired devices to control system audio sinks.</summary>
+    </key>
   </schema>
 </schemalist>

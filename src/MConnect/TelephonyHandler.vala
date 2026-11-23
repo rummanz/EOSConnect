@@ -27,13 +27,17 @@ namespace MConnect {
 
         public const string TELEPHONY = "kdeconnect.telephony";
         public const string SMS_REQUEST = "kdeconnect.sms.request";
+        public const string TELEPHONY_REQUEST_MUTE = "kdeconnect.telephony.request_mute";
 
         public DateTime last_sms_received_date_time { get; private set; }
+        private Gee.HashMap<string, string> call_notification_ids;
+        private string? mute_device_id;
         public string get_pkt_type () {
             return TELEPHONY;
         }
 
         private TelephonyHandler () {
+            call_notification_ids = new Gee.HashMap<string, string> ();
         }
 
         public static TelephonyHandler instance () {
@@ -57,17 +61,25 @@ namespace MConnect {
             }
 
             info ("Got telephony packet.");
-            if (pkt.body.has_member ("phoneNumber") == false ||
-                pkt.body.has_member ("event") == false) {
+            if (pkt.body.has_member ("isCancel") &&
+                is_true_member (pkt.body, "isCancel")) {
+                withdraw_call_notification (device);
+                MprisHandler.instance ().resume_media_after_call ();
+                return;
+            }
+            if (!pkt.body.has_member ("event")) {
                 return;
             }
 
             string id = pkt.id.to_string ();
             string event = pkt.body.get_string_member ("event");
-            string message_body = pkt.body.get_string_member ("messageBody");
-            string phone_thumbnail = pkt.body.get_string_member ("phoneThumbnail");
-            string phone_number = pkt.body.get_string_member ("phoneNumber");
+            string phone_number = pkt.body.has_member ("phoneNumber")
+                ? pkt.body.get_string_member ("phoneNumber") : _("unknown number");
             string contact_name = pkt.body.has_member ("contactName") ? pkt.body.get_string_member ("contactName") : phone_number;
+            string phone_thumbnail = pkt.body.has_member ("phoneThumbnail")
+                ? pkt.body.get_string_member ("phoneThumbnail") : "";
+            string message_body = pkt.body.has_member ("messageBody")
+                ? pkt.body.get_string_member ("messageBody") : "";
 
             string device_name = (device.custom_name.length > 0) ? device.custom_name : device.name;
             string notif_summary = "";
@@ -79,14 +91,16 @@ namespace MConnect {
                 last_sms_received_date_time = new DateTime.now_utc ();
                 SMSContact sms_contact = new SMSContact (phone_number, contact_name, device.id,
                                                          phone_thumbnail, contact_name);
-                SMSStore.instance ().add_sms (
-                    device,
-                    new SMS (
-                        message_body,
-                        SMS.FROM_CONTACT,
-                        SMS.FROM_TYPE_TELEPHONY,
-                        last_sms_received_date_time),
-                    sms_contact);
+                if (((EOSConnect.Plugin.Telephony)device.get_plugin (TELEPHONY)).is_active) {
+                    SMSStore.instance ().add_sms (
+                        device,
+                        new SMS (
+                            message_body,
+                            SMS.FROM_CONTACT,
+                            SMS.FROM_TYPE_TELEPHONY,
+                            last_sms_received_date_time),
+                        sms_contact);
+                }
 
                 notif_summary = "SMS\u0040" + device_name;
                 notif_body = "<i>" + contact_name + "</i>\n";
@@ -98,10 +112,41 @@ namespace MConnect {
                 }
             }
 
-            if (device.is_capabality_activated (NotificationHandler.NOTIFICATION) == false ||
-               ((Plugin.Notification)device.get_plugin (NotificationHandler.NOTIFICATION)).settings_receive_is_active == false) {
-                debug ("Notification deactivated for device %s", device.custom_name);
+            if (event == "ringing" || event == "missedCall") {
+                if (event == "ringing") {
+                    MprisHandler.instance ().pause_media_for_call ();
+                }
+                if (event == "missedCall") {
+                    MprisHandler.instance ().resume_media_after_call ();
+                }
+                notif_summary = event == "ringing" ? "Incoming call" : "Missed call";
+                notif_summary = notif_summary + "\u0040" + device_name;
+                notif_body = contact_name;
+                if (phone_number != "" && phone_number != contact_name) {
+                    notif_body = contact_name + "\n" + phone_number;
+                }
+                if (phone_thumbnail.length > 10) {
+                    var sms_contact = new SMSContact (
+                        phone_number, contact_name, device.id, phone_thumbnail, contact_name);
+                    if (sms_contact.set_contact_image ()) {
+                        notification_icon_pathname = sms_contact.contact_image_path;
+                        set_notification_icon = notification_icon_pathname.length > 10;
+                    }
+                }
+            } else if (event == "talking") {
+                withdraw_call_notification (device);
                 return;
+            } else if (event != "sms") {
+                debug ("Ignoring unsupported telephony event %s", event);
+                return;
+            }
+
+            if (event == "sms") {
+                if (device.is_capabality_activated (NotificationHandler.NOTIFICATION) == false ||
+                   ((Plugin.Notification)device.get_plugin (NotificationHandler.NOTIFICATION)).settings_receive_is_active == false) {
+                    debug ("Notification deactivated for device %s", device.custom_name);
+                    return;
+                }
             }
 
             var notification = new GLib.Notification (notif_summary);
@@ -110,6 +155,16 @@ namespace MConnect {
             if (event == "sms") {
                 // Action defined in EOSConnect._init_sms_history_view ()
                 notification.set_default_action ("app.telephony-open-sms-tab");
+            }
+            if (event == "ringing") {
+                string call_id = "call_" + device.id + "_" + phone_number;
+                call_notification_ids.@set (device.id, call_id);
+                mute_device_id = device.id;
+                notification.add_button ("Mute call", "app.telephony-mute-call");
+                id = call_id;
+            } else if (event == "missedCall") {
+                id = "missed_call_" + device.id + "_" + phone_number;
+                call_notification_ids.@unset (device.id);
             }
 
             if (set_notification_icon == true) {
@@ -174,6 +229,57 @@ namespace MConnect {
         //        ),
         //        pkt.body.get_string_member ("title"));
         //}
+
+        private bool is_true_member (Json.Object body, string member) {
+            if (!body.has_member (member)) {
+                return false;
+            }
+            var node = body.get_member (member);
+            if (node.get_node_type () == Json.NodeType.VALUE) {
+                try {
+                    return node.get_boolean ();
+                } catch (Error e) {
+                }
+                string? value = node.get_string ();
+                return value != null &&
+                    (value.down () == "true" || value == "1");
+            }
+            return false;
+        }
+
+        private void withdraw_call_notification (Device device) {
+            string? notification_id;
+            call_notification_ids.unset (device.id, out notification_id);
+            if (notification_id == null) {
+                notification_id = "call_" + device.id;
+            }
+            try {
+                Core.instance ().application.withdraw_notification (notification_id);
+            } catch (Error e) {
+                warning ("Unable to close call notification: %s", e.message);
+            }
+            if (mute_device_id == device.id) {
+                mute_device_id = null;
+            }
+        }
+
+        public void mute_current_call () {
+            if (mute_device_id == null) {
+                return;
+            }
+            foreach (Device device in Core.instance ().devices_map.values) {
+                if (device.id == mute_device_id) {
+                    var builder = new Json.Builder ();
+                    builder.begin_object ();
+                    builder.set_member_name ("action");
+                    builder.add_string_value ("mute");
+                    builder.end_object ();
+                    device.send (new Packet (TELEPHONY_REQUEST_MUTE,
+                                             builder.get_root ().get_object()));
+                    return;
+                }
+            }
+        }
 
         /**
          * make_sms_packet:

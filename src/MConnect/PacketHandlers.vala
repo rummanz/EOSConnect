@@ -48,6 +48,7 @@ namespace MConnect {
             var ping = PingHandler.instance ();
             var runcommand = RunCommandHandler.instance ();
             var share = ShareHandler.instance ();
+            var systemvolume = SystemVolumeHandler.instance ();
             var telephony = TelephonyHandler.instance ();
 
             hnd.@set (battery.get_pkt_type (), battery);
@@ -60,6 +61,8 @@ namespace MConnect {
             hnd.@set (runcommand.get_pkt_type (), runcommand);
             hnd.@set (RunCommandHandler.RUNCOMMAND_REQUEST, runcommand);
             hnd.@set (share.get_pkt_type (), share);
+            hnd.@set (systemvolume.get_pkt_type (), systemvolume);
+            hnd.@set (SystemVolumeHandler.SYSTEMVOLUME_REQUEST, systemvolume);
             hnd.@set (telephony.get_pkt_type (), telephony);
 
             return hnd;

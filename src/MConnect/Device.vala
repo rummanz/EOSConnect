@@ -574,6 +574,15 @@ namespace MConnect {
                         }
                     break;
 
+                    case SystemVolumeHandler.SYSTEMVOLUME:
+                        if (!plugins_map.has_key (SystemVolumeHandler.SYSTEMVOLUME)) {
+                            var volume_plugin = new EOSConnect.Plugin.SystemVolume ();
+                            volume_plugin.is_active = settings.get_boolean (
+                                volume_plugin.settings_key_is_active);
+                            plugins_map.@set (SystemVolumeHandler.SYSTEMVOLUME, volume_plugin);
+                        }
+                    break;
+
                     default:
                         // info ("Unable to find a plugin for this %s capability: %s", plugin_type, capability_name);
                     break;

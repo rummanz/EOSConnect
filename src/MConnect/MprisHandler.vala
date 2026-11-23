@@ -1,3 +1,5 @@
+using Gee;
+
 namespace MConnect {
 
     public class MprisHandler : Object, PacketHandlerInterface {
@@ -6,10 +8,33 @@ namespace MConnect {
         public const string MPRIS_REQUEST = "kdeconnect.mpris.request";
 
         private DBusConnection? connection;
+        private Gee.HashSet<string> subscribed_players;
 
         private MprisHandler () {
+            subscribed_players = new Gee.HashSet<string> ();
             try {
                 connection = Bus.get_sync (BusType.SESSION);
+                connection.signal_subscribe (
+                    "org.freedesktop.DBus",
+                    "org.freedesktop.DBus",
+                    "NameOwnerChanged",
+                    "/org/freedesktop/DBus",
+                    null,
+                    DBusSignalFlags.NONE,
+                    (bus, sender, path, iface, signal_name, parameters) => {
+                        string name = parameters.get_child_value (0).get_string ();
+                        if (!name.has_prefix ("org.mpris.MediaPlayer2.")) {
+                            return;
+                        }
+                        foreach (Device dev in Core.instance ().devices_map.values) {
+                            if (dev.is_active &&
+                                dev.is_paired &&
+                                dev.is_capabality_activated (MPRIS)) {
+                                send_player_list (dev);
+                            }
+                        }
+                    }
+                );
             } catch (Error e) {
                 warning ("Cannot connect to the session bus for MPRIS control: %s", e.message);
             }
@@ -34,6 +59,11 @@ namespace MConnect {
         private void message (Device dev, Packet pkt) {
             if ((pkt.pkt_type != MPRIS && pkt.pkt_type != MPRIS_REQUEST) ||
                 connection == null) {
+                return;
+            }
+
+            if (pkt.body.has_member ("albumArtUrl")) {
+                send_album_art (dev, pkt);
                 return;
             }
 
@@ -74,6 +104,8 @@ namespace MConnect {
                 builder.add_string_value (player_name (bus_name));
             }
             builder.end_array ();
+            builder.set_member_name ("supportAlbumArtPayload");
+            builder.add_boolean_value (true);
             builder.end_object ();
             dev.send (new Packet (MPRIS, builder.get_root ().get_object (), 0));
         }
@@ -304,6 +336,31 @@ namespace MConnect {
             builder.add_boolean_value (value != null && value.get_boolean ());
         }
 
+        private void subscribe_player (string bus_name) {
+            if (subscribed_players.contains (bus_name) || connection == null) {
+                return;
+            }
+            subscribed_players.add (bus_name);
+            connection.signal_subscribe (
+                bus_name,
+                "org.freedesktop.DBus.Properties",
+                "PropertiesChanged",
+                "/org/mpris/MediaPlayer2",
+                null,
+                DBusSignalFlags.NONE,
+                (bus, sender, path, iface, signal_name, parameters) => {
+                    foreach (Device dev in Core.instance ().devices_map.values) {
+                        if (dev.is_active &&
+                            dev.is_paired &&
+                            dev.is_capabality_activated (MPRIS)) {
+                            send_now_playing (dev, bus_name);
+                            send_volume (dev, bus_name);
+                        }
+                    }
+                }
+            );
+        }
+
         private string[] list_player_names () {
             string[] names = {};
             if (connection == null) {
@@ -320,8 +377,11 @@ namespace MConnect {
                     DBusCallFlags.NONE,
                     1000);
                 foreach (string name in reply.get_child_value (0).get_strv ()) {
-                    if (name.has_prefix ("org.mpris.MediaPlayer2.")) {
+                    if (name.has_prefix ("org.mpris.MediaPlayer2.") &&
+                        !name.contains (".kdeconnect.") &&
+                        name != "org.mpris.MediaPlayer2.playerctld") {
                         names += name;
+                        subscribe_player (name);
                     }
                 }
             } catch (Error e) {
@@ -361,6 +421,144 @@ namespace MConnect {
             }
             string name = bus_name.replace ("org.mpris.MediaPlayer2.", "");
             return name != "" ? name : bus_name;
+        }
+
+        private Gee.ArrayList<string> paused_for_call;
+
+        public void pause_media_for_call () {
+            if (paused_for_call == null) {
+                paused_for_call = new Gee.ArrayList<string> ();
+            }
+            paused_for_call.clear ();
+            foreach (string bus_name in list_player_names ()) {
+                Variant? status = get_mpris_property (
+                    bus_name, "org.mpris.MediaPlayer2.Player", "PlaybackStatus");
+                if (status != null && status.get_string () == "Playing") {
+                    call_player (bus_name, "Pause", null);
+                    paused_for_call.add (bus_name);
+                }
+            }
+        }
+
+        public void resume_media_after_call () {
+            if (paused_for_call == null) {
+                paused_for_call = new Gee.ArrayList<string> ();
+            }
+            if (paused_for_call.size == 0) {
+                Gee.ArrayList<string> playing_before_call =
+                    new Gee.ArrayList<string> ();
+                foreach (string bus_name in list_player_names ()) {
+                    Variant? status = get_mpris_property (
+                        bus_name, "org.mpris.MediaPlayer2.Player", "PlaybackStatus");
+                    if (status != null && status.get_string () == "Paused") {
+                        playing_before_call.add (bus_name);
+                    }
+                }
+                if (playing_before_call.size == 0) {
+                    return;
+                }
+                paused_for_call.add_all (playing_before_call);
+            }
+
+            debug ("Resuming media paused for incoming call");
+            string[] to_resume = paused_for_call.to_array ();
+            paused_for_call.clear ();
+            foreach (string bus_name in to_resume) {
+                resume_player_after_call (bus_name);
+            }
+            Timeout.add (500, () => {
+                foreach (string bus_name in to_resume) {
+                    Variant? status = get_mpris_property (
+                        bus_name, "org.mpris.MediaPlayer2.Player", "PlaybackStatus");
+                    if (status != null && status.get_string () != "Playing") {
+                        debug ("Retrying media resume for %s", bus_name);
+                        resume_player_after_call (bus_name);
+                    }
+                }
+                return false;
+            });
+            Timeout.add (1500, () => {
+                foreach (string bus_name in to_resume) {
+                    Variant? status = get_mpris_property (
+                        bus_name, "org.mpris.MediaPlayer2.Player", "PlaybackStatus");
+                    if (status != null && status.get_string () != "Playing") {
+                        debug ("Retrying media resume again for %s", bus_name);
+                        resume_player_after_call (bus_name);
+                    }
+                }
+                return false;
+            });
+        }
+
+        private void resume_player_after_call (string bus_name) {
+            Variant? can_play = get_mpris_property (
+                bus_name, "org.mpris.MediaPlayer2.Player", "CanPlay");
+            if (can_play == null || can_play.get_boolean ()) {
+                debug ("Sending Play to %s after call", bus_name);
+                call_player (bus_name, "Play", null);
+            } else {
+                warning ("Cannot resume %s: player reports CanPlay=false", bus_name);
+            }
+        }
+
+        private void send_album_art (Device dev, Packet pkt) {
+            if (!pkt.body.has_member ("player") || !pkt.body.has_member ("albumArtUrl")) {
+                return;
+            }
+            string player = pkt.body.get_string_member ("player");
+            string? bus_name = resolve_player (player);
+            if (bus_name == null) {
+                return;
+            }
+            string requested_url = pkt.body.get_string_member ("albumArtUrl");
+            if (!requested_url.has_prefix ("file://")) {
+                return;
+            }
+            Variant? metadata = get_mpris_property (
+                bus_name, "org.mpris.MediaPlayer2.Player", "Metadata");
+            if (metadata == null) {
+                return;
+            }
+            Variant? art_url = metadata.lookup_value ("mpris:artUrl", null);
+            if (art_url == null || art_url.get_string () != requested_url) {
+                return;
+            }
+            File file = File.new_for_uri (requested_url);
+            if (!file.query_exists ()) {
+                return;
+            }
+            try {
+                FileInputStream input = file.read ();
+                FileInfo info = file.query_info (
+                    FileAttribute.STANDARD_SIZE, FileQueryInfoFlags.NONE);
+                uint port;
+                var listener = Core.instance ().transfer_manager.make_listener (out port);
+                if (listener == null) {
+                    warning ("Cannot allocate album-art transfer listener");
+                    return;
+                }
+                var transfer = new UploadTransfer (dev, listener, input, info.get_size ());
+                Core.instance ().transfer_manager.push_job (transfer);
+                transfer.start_async.begin ();
+
+                var builder = new Json.Builder ();
+                builder.begin_object ();
+                builder.set_member_name ("transferringAlbumArt");
+                builder.add_boolean_value (true);
+                builder.set_member_name ("player");
+                builder.add_string_value (player);
+                builder.set_member_name ("albumArtUrl");
+                builder.add_string_value (requested_url);
+                builder.end_object ();
+                var packet = new Packet (MPRIS, builder.get_root ().get_object ());
+                packet.payload = Packet.Payload () {
+                    size = info.get_size (),
+                    port = port
+                };
+                dev.send (packet);
+            } catch (Error e) {
+                warning ("Cannot send MPRIS album art: %s", e.message);
+            }
         }
     }
 }

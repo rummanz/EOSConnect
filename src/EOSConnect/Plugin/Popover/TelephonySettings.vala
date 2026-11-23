@@ -52,22 +52,18 @@ namespace EOSConnect.Plugin.Popover {
             history_day_spin.halign = Gtk.Align.CENTER;
             history_day_spin.hexpand = false;
             history_day_spin.margin = 10;
-            //history_day_spin.value = device.settings.get_double("kdeconnect-battery-low-level-treshold");
-
-
-            // device.settings.bind ("kdeconnect-battery-low-level-treshold", history_day_spin,
-            //     "value", SettingsBindFlags.DEFAULT);
+            history_day_spin.sensitive = false;
+            history_day_label.sensitive = false;
 
             var activation_switch = new Gtk.Switch ();
             activation_switch.tooltip_text = _("Activate / Deactivate history");
             activation_switch.halign = Gtk.Align.END;
             activation_switch.hexpand = false;
             activation_switch.margin = 10;
-
-            // device.settings.bind ("kdeconnect-battery-notify-low-level-active", activation_switch,
-            //     "active", SettingsBindFlags.DEFAULT);
-
-            // history_day_spin.sensitive = device.settings.get_boolean ("kdeconnect-battery-notify-low-level-active");
+            activation_switch.active = device.settings.get_boolean (
+                "kdeconnect-telephony-store-sms-active");
+            device.settings.bind ("kdeconnect-telephony-store-sms-active",
+                activation_switch, "active", SettingsBindFlags.DEFAULT);
 
             // left, top, width, height1
             var grid = new Gtk.Grid ();

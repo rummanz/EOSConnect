@@ -25,8 +25,10 @@ The first input event can also be missed while the portal session is being creat
 - Device discovery, pairing, connections, two-way file transfer, and plugin settings have been tested.
 - Remote mouse and keyboard input have been tested in an X11 session.
 - Plaintext clipboard synchronization has been tested and works.
-- MPRIS multimedia control has been tested and works.
+- MPRIS multimedia control, live metadata, album art, and player discovery have been tested and work.
+- PipeWire/PulseAudio system-volume sink discovery and controls have been tested and work.
 - Remote commands can be configured through EOSConnect's device plugin settings and are synchronized to paired devices.
+- Telephony call notifications, mute, incoming SMS handling, and automatic media pause/resume have been tested and work.
 - SMS and address-book/contact features are implemented in the existing application but have not yet been tested as part of this revival.
 - Remote input through a Wayland portal is experimental and unavailable on elementary OS until its portal backend supports RemoteDesktop.
 
@@ -120,9 +122,12 @@ sudo ninja -C build install
 - [ ] SMS plugin configuration. (to setup how many days of history we want to keep)
 
 #### v0.5.1 - Telephony
-- [ ] Display who's calling, with contact photo if available.
-- [ ] Make sure we display notification when call missed.
-- [ ] Telephony plugin configuration.
+- [x] Incoming call, missed-call, talking, and call-cancellation notifications. (verified)
+- [x] Contact name and optional phone-thumbnail photo in call notifications.
+- [x] Mute-call notification action. (verified)
+- [x] Store and display incoming SMS in the existing SMS history.
+- [x] Telephony plugin SMS-storage configuration.
+- [x] Automatically pause playing MPRIS media for incoming calls and resume it when the call ends. (verified)
 
 #### v0.7 - Commands
 - [x] Execute an explicit allowlist of configured commands.
@@ -136,6 +141,8 @@ sudo ninja -C build install
 
 #### v0.9 - Multimedia control 
 - [x] MPRIS player discovery and basic playback, track, volume, and seeking controls. (verified)
+- [x] Local PipeWire/PulseAudio sink discovery and remote volume, mute, and default-sink control.
+- [x] MPRIS album-art payload delivery and live metadata updates. (verified)
 - [x] Multimedia control plugin configuration.
 
 #### v0.9.1 - Remote control
