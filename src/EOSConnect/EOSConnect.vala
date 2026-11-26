@@ -201,6 +201,11 @@ namespace EOSConnect {
                 launcher_entry.quicklist =  new Dbusmenu.Menuitem ();
             }
 
+            // Collect items to remove first to avoid modifying the list
+            // while iterating over get_children() which causes a crash.
+            var items_to_remove = new Gee.ArrayList<DeviceMenuitem> ();
+            var devices_to_destroy = new Gee.ArrayList<Device> ();
+
             foreach (var device_entry in devices_map.entries) {
                 bool to_add = true;
                 bool to_remove = false;
@@ -217,9 +222,10 @@ namespace EOSConnect {
                         to_add = false;
 
                         if (to_remove == true) {
-                            launcher_entry.quicklist.child_delete (device_menuitem);
-                            Contractor.destroy_contract (device_entry.value);
+                            items_to_remove.add (((DeviceMenuitem)device_menuitem));
+                            devices_to_destroy.add (device_entry.value);
                         }
+                        break;
                     }
                 }
 
@@ -237,6 +243,16 @@ namespace EOSConnect {
                 //     print ("\n[ADD DEVICE]================> %i - %s\n", device_entry.value.device_num, device_entry.value.custom_name);
                 //     launcher_entry.quicklist.child_append (new DeviceMenuitem.with_device (device_entry.value));
                 // }
+            }
+
+            // Remove items after iteration is complete
+            foreach (var item in items_to_remove) {
+                launcher_entry.quicklist.child_delete (item);
+            }
+
+            // Destroy contracts for removed devices
+            foreach (var dev in devices_to_destroy) {
+                Contractor.destroy_contract (dev);
             }
         }
     }

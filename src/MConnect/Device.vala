@@ -280,6 +280,32 @@ namespace MConnect {
         }
 
         /**
+         * unpair:
+         *
+         * Unpair the device and stop communicating with it. The device is not
+         * removed from the device list; it is simply marked as unpaired and the
+         * connection is closed so that no further communication happens.
+         */
+        public async void unpair () {
+            if (_channel != null && is_active && is_paired) {
+                // Notify the peer that we are unpairing.
+                yield _channel.send (Packet.new_pair (false));
+            }
+
+            if (is_paired) {
+                is_paired = false;
+            }
+
+            // Stop communicating with the device. The disconnected() signal
+            // will be emitted by deactivate(), which triggers device_deconnected
+            // and devices_updated() to refresh the UI. We do not emit paired(false)
+            // here to avoid reentrancy issues with DeviceManager.device_paired
+            // calling deactivate() while we're still inside the paired() signal
+            // emission.
+            deactivate ();
+        }
+
+        /**
          * maybe_pair:
          *
          * Trigger pairing or call handle_pair() if already paired.

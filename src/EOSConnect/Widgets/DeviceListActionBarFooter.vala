@@ -24,6 +24,7 @@ namespace EOSConnect.Widgets {
         public MainWindow main_window { get; construct; }
 
         private Gtk.Button button_remove;
+        private Device _current_device;
 
         public DeviceListActionBarFooter (MainWindow main_window) {
             Object (main_window: main_window);
@@ -34,28 +35,19 @@ namespace EOSConnect.Widgets {
             button_remove.sensitive = false;
             button_remove.tooltip_text = _("Forget selected device");
 
-            var refresh_devices_button = new Gtk.Button.from_icon_name ("view-refresh");
-            refresh_devices_button.tooltip_text = _("Refresh devices");
-
             get_style_context ().add_class (Gtk.STYLE_CLASS_INLINE_TOOLBAR);
-            add (refresh_devices_button);
             add (button_remove);
 
             button_remove.clicked.connect (() => {
-                debug ("@TODO - remove device.");
-            });
-
-            refresh_devices_button.clicked.connect (() => {
-                // main_window.display_overlaybar (_("Searching for devices..."));
-                // ClientIface.get_instance ().get_device_list.begin ();
+                if (_current_device != null) {
+                    _current_device.unpair.begin ();
+                }
             });
         }
 
         public void update_ui (Device device) {
-            button_remove.sensitive = false;
-            // if (device.is_paired == false && device.is_connected == false) {
-            //     button_remove.sensitive = true;
-            // }
+            _current_device = device;
+            button_remove.sensitive = device.is_paired;
         }
     }
 }

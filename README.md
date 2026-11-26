@@ -152,9 +152,9 @@ sudo ninja -C build install
 - [ ] Remote control plugin configuration
 
 #### v1
-- [ ] Remove refresh icon at bottom of devices list. 
-- [ ] Unpair device, with icon at bottom of devices list.
-- [ ] Option, when unpairing a device, to delete everything: configuration, SMS history.
+- [x] Remove refresh icon at bottom of devices list. 
+- [x] Unpair device, with icon at bottom of devices list.
+- [x] Option, when unpairing a device, to delete everything: configuration, SMS history.
 - [ ] Welcome screen, with how-to setup.
 - [ ] Option to setup public visible name of EOSConnect.
 - [ ] Translations: french.
